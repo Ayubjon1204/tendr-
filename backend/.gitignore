@@ -17,3 +17,9 @@ htmlcov/
 
 .env
 .env.local
+
+# SQLite local DB (dev)
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
