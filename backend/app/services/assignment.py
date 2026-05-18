@@ -1,24 +1,9 @@
-"""Avtomatik yuk biriktirish servisi.
+"""Avtomatik truck biriktirish servisi (carrier ichida).
 
-MVP yondashuvi: **greedy + scoring**.
-VRP (vehicle routing) Phase 4'da Yandex Routing API bilan keladi.
+Phase 2 refactor: endi `carrier_id` majburiy — bu carrier ichidagi truck'larga
+biriktiradi.
 
-Algoritm (yangi yuk uchun):
-1. Filter — yukga mos mashinalarni topish (capacity, body_type, sxedjul, active)
-2. Score — har bir nomzodga ball berish (yaqinlik, sig'im samaradorligi,
-   back-haul potensiali, jadval bo'shligi)
-3. Top-N nomzod qaytarish; eng yaxshisi `chosen` bo'lib biriktiriladi
-
-Score komponentlari (yuqori = yaxshi):
-- distance_score:    yaqinroq pickup'ga = yaxshi
-- capacity_score:    kerakli sig'imga yaqin = yaxshi (uloqdek katta mashinani
-                     kichik yukga qo'yish — empty volume isrofi)
-- schedule_score:    pickup_window'ga mos = yaxshi
-- backhaul_score:    truck home_base destination'ga yaqin bo'lsa = bonus
-
-Eslatma: bu skor — 30 yillik logistika qoidasi:
-- 100 km bo'sh yurish = 1 ta past-marja yuk daromadi
-- Shuning uchun distance og'irligi katta (bo'sh probeg = pul yo'qotish)
+Full lifecycle (factory distribution → carrier accept → truck assignment) Phase 4'da.
 """
 from __future__ import annotations
 
@@ -26,7 +11,7 @@ from datetime import datetime, timedelta, timezone
 from typing import NamedTuple
 from uuid import UUID
 
-from sqlalchemy import and_, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -37,13 +22,11 @@ from app.models.truck_schedule import ScheduleKind, TruckSchedule
 from app.schemas.assignment import AutoAssignResult, TruckCandidate
 from app.schemas.common import GeoPoint
 from app.services.geo import (
+    coords_to_geopoint,
     estimate_drive_hours,
     haversine_km,
-    geopoint_to_wkt,
-    wkb_to_geopoint,
 )
 
-# Hardcoded knobs — keyinchalik DB sozlamasiga ko'chiriladi
 MAX_PICKUP_DISTANCE_KM = 500.0
 DISTANCE_WEIGHT = 1.0
 CAPACITY_WEIGHT = 0.5
@@ -61,18 +44,19 @@ class ScoredCandidate(NamedTuple):
 async def find_candidates_for_cargo(
     db: AsyncSession,
     cargo: Cargo,
+    carrier_id: UUID,
     max_results: int = 5,
 ) -> list[ScoredCandidate]:
-    """Yukga mos eng yaxshi mashinalarni topish."""
-    pickup = wkb_to_geopoint(cargo.origin_location)
-    destination = wkb_to_geopoint(cargo.destination_location)
+    """Berilgan carrier'ning fleet ichidan yukga mos truck'larni topish."""
+    pickup = coords_to_geopoint(cargo.origin_lat, cargo.origin_lng)
+    destination = coords_to_geopoint(cargo.destination_lat, cargo.destination_lng)
     if pickup is None or destination is None:
         return []
 
-    # 1. Asosiy filter: active, yetarli sig'im, body_type mos
     stmt = (
         select(Truck)
         .where(
+            Truck.carrier_id == carrier_id,
             Truck.is_active.is_(True),
             Truck.status.in_([TruckStatus.AVAILABLE, TruckStatus.UNLOADING]),
             Truck.capacity_kg >= cargo.weight_kg,
@@ -100,40 +84,31 @@ def _score_truck(
     pickup: GeoPoint,
     destination: GeoPoint,
 ) -> ScoredCandidate | None:
-    """Bitta truck'ni baholash. None qaytarsa — biriktirib bo'lmaydi."""
     reasons: list[str] = []
 
-    truck_loc = wkb_to_geopoint(truck.current_location)
+    truck_loc = coords_to_geopoint(truck.current_lat, truck.current_lng)
     if truck_loc is None:
-        # Joylashuv noma'lum — home_base'dan foydalanamiz
-        truck_loc = wkb_to_geopoint(truck.home_base_location)
+        truck_loc = coords_to_geopoint(truck.home_base_lat, truck.home_base_lng)
         if truck_loc is None:
             return None
         reasons.append("joylashuv noma'lum, home_base ishlatildi")
 
     distance_km = haversine_km(truck_loc, pickup)
     if distance_km > MAX_PICKUP_DISTANCE_KM:
-        return None  # Juda uzoq — yuborish foydasiz
+        return None
 
-    # 2. Schedule conflict tekshirish
     if _has_schedule_conflict(truck, cargo.pickup_window_start, cargo.delivery_deadline):
         return None
     reasons.append("jadval bo'sh")
 
-    # 3. Mashina pickup_window boshlanguncha yetib bora oladimi?
     drive_hours = estimate_drive_hours(distance_km)
     can_arrive_by = datetime.now(tz=timezone.utc) + timedelta(hours=drive_hours)
     if can_arrive_by > cargo.pickup_window_end:
         return None
-    if can_arrive_by <= cargo.pickup_window_end:
-        reasons.append(f"~{drive_hours:.1f} soatda yetib boradi")
+    reasons.append(f"~{drive_hours:.1f} soatda yetib boradi")
 
-    # --- Score komponentlari ---
-    # Distance score: 1.0 (yaqin) -> 0.0 (uzoq)
     distance_score = max(0.0, 1.0 - distance_km / MAX_PICKUP_DISTANCE_KM)
 
-    # Capacity score: 1.0 (aniq mos) -> 0.0 (juda katta)
-    # 30 yillik qoida: 80% sig'im to'ldirilsa optimal
     fill_ratio = cargo.weight_kg / truck.capacity_kg
     if fill_ratio >= 0.8:
         capacity_score = 1.0
@@ -144,13 +119,11 @@ def _score_truck(
         capacity_score = 0.3
         reasons.append(f"sig'im atigi {fill_ratio:.0%} — katta mashina")
 
-    # Schedule score: pickup_window keng bo'lsa yaxshi
     window_hours = (cargo.pickup_window_end - cargo.pickup_window_start).total_seconds() / 3600
     schedule_score = min(1.0, window_hours / 8.0)
 
-    # Backhaul score: home_base destination'ga yaqinmi?
     backhaul_score = 0.0
-    home_base = wkb_to_geopoint(truck.home_base_location)
+    home_base = coords_to_geopoint(truck.home_base_lat, truck.home_base_lng)
     if home_base is not None:
         home_to_dest_km = haversine_km(home_base, destination)
         if home_to_dest_km < 100:
@@ -177,11 +150,9 @@ def _score_truck(
 def _has_schedule_conflict(
     truck: Truck, window_start: datetime, window_end: datetime
 ) -> bool:
-    """Truck jadvalida mavjud band/dam vaqtlar bilan to'qnashuv borligini tekshirish."""
     for entry in truck.schedules:
         if entry.kind == ScheduleKind.WORK:
-            continue  # ish vaqti — to'qnashuv emas
-        # Overlap: NOT (end <= start_existing OR start >= end_existing)
+            continue
         if not (window_end <= entry.start_at or window_start >= entry.end_at):
             return True
     return False
@@ -190,25 +161,18 @@ def _has_schedule_conflict(
 async def auto_assign_cargo(
     db: AsyncSession,
     cargo_id: UUID,
+    carrier_id: UUID,
     max_candidates: int = 5,
     create_assignment: bool = True,
 ) -> AutoAssignResult:
-    """Yukni avtomatik biriktirish — eng yaxshi mashinaga.
-
-    `create_assignment=False` bo'lsa — faqat nomzodlarni qaytaradi (dry-run).
-    """
-    cargo = await db.scalar(
-        select(Cargo).where(Cargo.id == cargo_id)
-    )
+    """Yukni carrier ichida eng yaxshi mashinaga avto-biriktirish."""
+    cargo = await db.scalar(select(Cargo).where(Cargo.id == cargo_id))
     if cargo is None:
         return AutoAssignResult(cargo_id=cargo_id, message="Yuk topilmadi")
-    if cargo.status != CargoStatus.NEW:
-        return AutoAssignResult(
-            cargo_id=cargo_id,
-            message=f"Yuk holati '{cargo.status.value}' — faqat 'new' uchun avto-biriktirish",
-        )
 
-    candidates = await find_candidates_for_cargo(db, cargo, max_results=max_candidates)
+    candidates = await find_candidates_for_cargo(
+        db, cargo, carrier_id, max_results=max_candidates
+    )
     if not candidates:
         return AutoAssignResult(
             cargo_id=cargo_id,
@@ -237,25 +201,24 @@ async def auto_assign_cargo(
             message="Dry-run — biriktirish yaratilmadi",
         )
 
-    # Eng yaxshi nomzodga biriktirish yaratish
     best = candidates[0]
     pickup_planned = max(
         cargo.pickup_window_start,
         datetime.now(tz=timezone.utc)
         + timedelta(hours=estimate_drive_hours(best.distance_to_pickup_km)),
     )
-    delivery_distance = haversine_km(
-        wkb_to_geopoint(cargo.origin_location),  # type: ignore[arg-type]
-        wkb_to_geopoint(cargo.destination_location),  # type: ignore[arg-type]
-    )
+    origin_gp = coords_to_geopoint(cargo.origin_lat, cargo.origin_lng)
+    dest_gp = coords_to_geopoint(cargo.destination_lat, cargo.destination_lng)
+    delivery_distance = haversine_km(origin_gp, dest_gp) if origin_gp and dest_gp else 0  # type: ignore[arg-type]
     delivery_planned = pickup_planned + timedelta(
-        hours=estimate_drive_hours(delivery_distance) + 2  # +2 yuklash/tushirish vaqti
+        hours=estimate_drive_hours(delivery_distance) + 2
     )
 
     assignment = Assignment(
         cargo_id=cargo.id,
+        carrier_id=carrier_id,
         truck_id=best.truck.id,
-        driver_id=None,  # Driver — keyinchalik dispatcher tasdiqlashida
+        driver_id=None,
         status=AssignmentStatus.PROPOSED,
         assigned_by=AssignmentSource.SYSTEM,
         planned_pickup_at=pickup_planned,
@@ -264,13 +227,8 @@ async def auto_assign_cargo(
         notes=" | ".join(best.reasons),
     )
     db.add(assignment)
+    cargo.status = CargoStatus.ASSIGNED_TRUCK
 
-    # Cargo statusini yangilash
-    cargo.status = CargoStatus.ASSIGNED
-    # Truck statusini reserve (busy emas — hali jo'natilmagan)
-    # busy bo'lishi assignment ACCEPTED bo'lganda
-
-    # Schedule ga qo'shish
     schedule_entry = TruckSchedule(
         truck_id=best.truck.id,
         start_at=pickup_planned,
@@ -280,7 +238,7 @@ async def auto_assign_cargo(
     )
     db.add(schedule_entry)
 
-    await db.flush()  # ID lar uchun
+    await db.flush()
     await db.commit()
     await db.refresh(assignment)
 

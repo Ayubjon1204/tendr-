@@ -1,19 +1,12 @@
 """Geo utilities.
 
 Haversine — buyuk doira (great-circle) bo'yicha masofa.
-PostGIS bilan ishlash uchun helper'lar.
-
-Hozircha haqiqiy yo'l masofasi (routing) yo'q — Yandex Routing API Phase 5'da.
-Haversine ~30% kam, lekin nisbiy taqqoslash uchun yetarli (eng yaqin truck'ni
-topish kabi nisbiy operatsiyalar uchun aniq routing shart emas).
+Yandex Routing API (haqiqiy yo'l vaqti/masofasi) Phase 5'da.
 """
 from __future__ import annotations
 
 import math
-from typing import Any
-
-from geoalchemy2.elements import WKBElement
-from geoalchemy2.shape import to_shape
+from decimal import Decimal
 
 from app.schemas.common import GeoPoint
 
@@ -36,23 +29,10 @@ def estimate_drive_hours(distance_km: float, avg_speed_kmh: float = 60.0) -> flo
     return distance_km / avg_speed_kmh
 
 
-def wkb_to_geopoint(wkb: WKBElement | None) -> GeoPoint | None:
-    """PostGIS Geography (POINT) -> GeoPoint."""
-    if wkb is None:
+def coords_to_geopoint(
+    lat: Decimal | float | None, lng: Decimal | float | None
+) -> GeoPoint | None:
+    """DB ustunlardan GeoPoint yig'ish."""
+    if lat is None or lng is None:
         return None
-    point = to_shape(wkb)
-    return GeoPoint(lat=point.y, lng=point.x)
-
-
-def geopoint_to_wkt(point: GeoPoint) -> str:
-    """GeoPoint -> WKT (DB INSERT uchun)."""
-    return f"SRID=4326;POINT({point.lng} {point.lat})"
-
-
-def model_location_to_geopoint(value: Any) -> GeoPoint | None:
-    """SQLAlchemy obyektning location ustunini GeoPoint'ga aylantirish."""
-    if value is None:
-        return None
-    if isinstance(value, WKBElement):
-        return wkb_to_geopoint(value)
-    return None
+    return GeoPoint(lat=float(lat), lng=float(lng))

@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from decimal import Decimal
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Query, status
@@ -10,7 +11,6 @@ from app.models.company import Company, CompanyKind
 from app.models.location_history import LocationHistory
 from app.models.truck import Truck, TruckStatus
 from app.schemas.truck import TruckCreate, TruckLocationUpdate, TruckOut, TruckUpdate
-from app.services.geo import geopoint_to_wkt
 
 router = APIRouter(prefix="/trucks", tags=["trucks"])
 
@@ -20,6 +20,7 @@ async def list_trucks(
     db: DbSession,
     _user: CurrentUser,
     carrier_id: UUID | None = None,
+    is_spot: bool | None = None,
     status_: TruckStatus | None = Query(None, alias="status"),
     is_active: bool | None = None,
     page: int = Query(1, ge=1),
@@ -28,6 +29,8 @@ async def list_trucks(
     stmt = select(Truck)
     if carrier_id:
         stmt = stmt.where(Truck.carrier_id == carrier_id)
+    if is_spot is not None:
+        stmt = stmt.where(Truck.is_spot.is_(is_spot))
     if status_:
         stmt = stmt.where(Truck.status == status_)
     if is_active is not None:
@@ -38,20 +41,32 @@ async def list_trucks(
 
 @router.post("", response_model=TruckOut, status_code=status.HTTP_201_CREATED)
 async def create_truck(payload: TruckCreate, db: DbSession, _user: CurrentUser) -> Truck:
-    carrier = await db.get(Company, payload.carrier_id)
-    if not carrier or carrier.kind != CompanyKind.CARRIER:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="carrier_id must reference a carrier-type company",
-        )
+    if not payload.is_spot:
+        if not payload.carrier_id:
+            raise HTTPException(
+                status_code=400, detail="carrier_id is required for non-spot trucks"
+            )
+        carrier = await db.get(Company, payload.carrier_id)
+        if not carrier or carrier.kind != CompanyKind.CARRIER:
+            raise HTTPException(
+                status_code=400,
+                detail="carrier_id must reference a carrier-type company",
+            )
+    else:
+        if not payload.spot_source:
+            raise HTTPException(
+                status_code=400, detail="spot_source is required for spot trucks"
+            )
 
     data = payload.model_dump(exclude={"current_location", "home_base_location"})
     truck = Truck(**data)
     if payload.current_location:
-        truck.current_location = geopoint_to_wkt(payload.current_location)
+        truck.current_lat = Decimal(str(payload.current_location.lat))
+        truck.current_lng = Decimal(str(payload.current_location.lng))
         truck.last_location_update = datetime.now(tz=timezone.utc)
     if payload.home_base_location:
-        truck.home_base_location = geopoint_to_wkt(payload.home_base_location)
+        truck.home_base_lat = Decimal(str(payload.home_base_location.lat))
+        truck.home_base_lng = Decimal(str(payload.home_base_location.lng))
 
     db.add(truck)
     try:
@@ -86,7 +101,8 @@ async def update_truck(
     for field, value in data.items():
         setattr(truck, field, value)
     if "home_base_location" in payload.model_fields_set and payload.home_base_location:
-        truck.home_base_location = geopoint_to_wkt(payload.home_base_location)
+        truck.home_base_lat = Decimal(str(payload.home_base_location.lat))
+        truck.home_base_lng = Decimal(str(payload.home_base_location.lng))
 
     await db.commit()
     await db.refresh(truck)
@@ -100,18 +116,19 @@ async def update_truck_location(
     db: DbSession,
     _user: CurrentUser,
 ) -> Truck:
-    """Mashina joylashuvini yangilash (mobile app yoki manual)."""
     truck = await db.get(Truck, truck_id)
     if not truck:
         raise HTTPException(status_code=404, detail="Truck not found")
 
     now = datetime.now(tz=timezone.utc)
-    truck.current_location = geopoint_to_wkt(payload.location)
+    truck.current_lat = Decimal(str(payload.location.lat))
+    truck.current_lng = Decimal(str(payload.location.lng))
     truck.last_location_update = now
 
     history = LocationHistory(
         truck_id=truck.id,
-        location=geopoint_to_wkt(payload.location),
+        lat=Decimal(str(payload.location.lat)),
+        lng=Decimal(str(payload.location.lng)),
         speed_kmh=payload.speed_kmh,
         heading=payload.heading,
         recorded_at=now,

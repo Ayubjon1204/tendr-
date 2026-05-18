@@ -24,7 +24,7 @@ from app.schemas.dashboard import (
     IdleTruck,
     UrgentCargo,
 )
-from app.services.geo import haversine_km, wkb_to_geopoint
+from app.services.geo import coords_to_geopoint, haversine_km
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
@@ -61,7 +61,11 @@ async def get_summary(db: DbSession, _user: CurrentUser) -> DashboardSummary:
         select(func.count(Cargo.id)).where(Cargo.status == CargoStatus.NEW)
     ) or 0
     assigned_cargo = await db.scalar(
-        select(func.count(Cargo.id)).where(Cargo.status == CargoStatus.ASSIGNED)
+        select(func.count(Cargo.id)).where(
+            Cargo.status.in_(
+                [CargoStatus.CARRIER_ACCEPTED, CargoStatus.ASSIGNED_TRUCK]
+            )
+        )
     ) or 0
     in_transit = await db.scalar(
         select(func.count(Cargo.id)).where(Cargo.status == CargoStatus.IN_TRANSIT)
@@ -85,9 +89,14 @@ async def get_summary(db: DbSession, _user: CurrentUser) -> DashboardSummary:
             Company.kind == CompanyKind.CARRIER, Company.is_active.is_(True)
         )
     ) or 0
-    shippers = await db.scalar(
+    factories = await db.scalar(
         select(func.count(Company.id)).where(
-            Company.kind == CompanyKind.SHIPPER, Company.is_active.is_(True)
+            Company.kind == CompanyKind.FACTORY, Company.is_active.is_(True)
+        )
+    ) or 0
+    distributors = await db.scalar(
+        select(func.count(Company.id)).where(
+            Company.kind == CompanyKind.DISTRIBUTOR, Company.is_active.is_(True)
         )
     ) or 0
 
@@ -105,7 +114,8 @@ async def get_summary(db: DbSession, _user: CurrentUser) -> DashboardSummary:
         delivered_today=delivered_today,
         pending_assignments=pending,
         active_carriers=carriers,
-        active_shippers=shippers,
+        active_factories=factories,
+        active_distributors=distributors,
         fleet_utilization_pct=round(utilization, 1),
     )
 
@@ -167,7 +177,14 @@ async def get_urgent_cargo(
     stmt = (
         select(Cargo)
         .where(
-            Cargo.status.in_([CargoStatus.NEW, CargoStatus.ASSIGNED]),
+            Cargo.status.in_(
+                [
+                    CargoStatus.NEW,
+                    CargoStatus.DISTRIBUTED,
+                    CargoStatus.CARRIER_ACCEPTED,
+                    CargoStatus.ASSIGNED_TRUCK,
+                ]
+            ),
             Cargo.delivery_deadline <= deadline_cutoff,
         )
         .order_by(Cargo.delivery_deadline.asc())
@@ -250,11 +267,11 @@ async def get_backhaul_opportunities(
 
     opportunities: list[BackHaulOpportunity] = []
     for assignment, cargo, truck in rows:
-        dest = wkb_to_geopoint(cargo.destination_location)
+        dest = coords_to_geopoint(cargo.destination_lat, cargo.destination_lng)
         if dest is None:
             continue
         for new_c in new_cargos:
-            origin = wkb_to_geopoint(new_c.origin_location)
+            origin = coords_to_geopoint(new_c.origin_lat, new_c.origin_lng)
             if origin is None:
                 continue
             dist = haversine_km(dest, origin)

@@ -2,6 +2,7 @@ import type {
   AssignmentStatus,
   BodyType,
   CargoStatus,
+  CarrierType,
   CompanyKind,
   TruckStatus,
 } from '@/types/api'
@@ -69,20 +70,26 @@ export const truckStatusColor: Record<TruckStatus, 'green' | 'blue' | 'yellow' |
 
 export const cargoStatusLabel: Record<CargoStatus, string> = {
   new: 'Yangi',
-  assigned: 'Biriktirilgan',
-  picked_up: 'Olingan',
+  distributed: 'Tarqatildi',
+  carrier_accepted: 'Carrier qabul qildi',
+  assigned_truck: 'Mashina biriktirildi',
+  picked_up: 'Olindi',
   in_transit: 'Yo‘lda',
   delivered: 'Yetkazildi',
+  completed: 'Tugatildi',
   cancelled: 'Bekor',
   failed: 'Muvaffaqiyatsiz',
 }
 
 export const cargoStatusColor: Record<CargoStatus, 'blue' | 'yellow' | 'green' | 'red' | 'gray'> = {
   new: 'blue',
-  assigned: 'yellow',
+  distributed: 'blue',
+  carrier_accepted: 'yellow',
+  assigned_truck: 'yellow',
   picked_up: 'yellow',
   in_transit: 'yellow',
   delivered: 'green',
+  completed: 'green',
   cancelled: 'gray',
   failed: 'red',
 }
@@ -90,6 +97,7 @@ export const cargoStatusColor: Record<CargoStatus, 'blue' | 'yellow' | 'green' |
 export const assignmentStatusLabel: Record<AssignmentStatus, string> = {
   proposed: 'Taklif qilindi',
   accepted: 'Qabul qilindi',
+  forwarded: 'Boshqaga uzatildi',
   rejected: 'Rad etildi',
   in_progress: 'Jarayonda',
   completed: 'Tugatildi',
@@ -106,6 +114,13 @@ export const bodyTypeLabel: Record<BodyType, string> = {
 }
 
 export const companyKindLabel: Record<CompanyKind, string> = {
+  factory: 'Zavod',
   carrier: 'Tashuvchi',
-  shipper: 'Yuk egasi',
+  distributor: 'Distributor',
+}
+
+export const carrierTypeLabel: Record<CarrierType, string> = {
+  hybrid: 'Hibrid (o‘z + ekspeditor)',
+  forwarder: 'Ekspeditor (mashinasiz)',
+  asset_only: 'Faqat o‘z mashinasi',
 }

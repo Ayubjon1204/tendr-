@@ -4,6 +4,7 @@ from app.schemas.assignment import (
     AssignmentUpdate,
     AutoAssignRequest,
     AutoAssignResult,
+    TruckCandidate,
 )
 from app.schemas.auth import LoginRequest, TokenResponse
 from app.schemas.cargo import CargoCreate, CargoOut, CargoUpdate
@@ -14,6 +15,14 @@ from app.schemas.dashboard import (
     DashboardSummary,
     IdleTruck,
     UrgentCargo,
+)
+from app.schemas.document import (
+    DocumentCreate,
+    DocumentOut,
+    DocumentSignDistributor,
+    DocumentSignDriverDelivery,
+    DocumentSignDriverPickup,
+    DocumentSignFactory,
 )
 from app.schemas.driver import DriverCreate, DriverOut, DriverUpdate
 from app.schemas.truck import TruckCreate, TruckLocationUpdate, TruckOut, TruckUpdate
@@ -33,6 +42,12 @@ __all__ = [
     "CompanyOut",
     "CompanyUpdate",
     "DashboardSummary",
+    "DocumentCreate",
+    "DocumentOut",
+    "DocumentSignDistributor",
+    "DocumentSignDriverDelivery",
+    "DocumentSignDriverPickup",
+    "DocumentSignFactory",
     "DriverCreate",
     "DriverOut",
     "DriverUpdate",
@@ -41,6 +56,7 @@ __all__ = [
     "LoginRequest",
     "Pagination",
     "TokenResponse",
+    "TruckCandidate",
     "TruckCreate",
     "TruckLocationUpdate",
     "TruckOut",

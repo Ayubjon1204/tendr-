@@ -1,3 +1,10 @@
+"""Auth dependency'lari va rolga asoslangan ruxsatlar.
+
+3 darajali ruxsat:
+1. Authenticated  - faqat login qilgan
+2. Organization kind  - "men carrier yoki factory'man" (qaysi app)
+3. Role within org    - dispatcher / admin / owner
+"""
 from typing import Annotated
 from uuid import UUID
 
@@ -8,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import decode_access_token
 from app.db.session import get_db
+from app.models.company import Company, CompanyKind
 from app.models.user import User, UserRole
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
@@ -42,12 +50,51 @@ async def get_current_user(
 CurrentUser = Annotated[User, Depends(get_current_user)]
 
 
+async def get_current_company(
+    user: CurrentUser, db: DbSession
+) -> Company:
+    """Foydalanuvchi tegishli kompaniyani qaytaradi.
+
+    Agar `company_id` None bo'lsa (super-admin), 403 — bu endpoint org-scope'da.
+    """
+    if user.company_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This endpoint requires an organization-scoped user",
+        )
+    company = await db.get(Company, user.company_id)
+    if not company or not company.is_active:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Company inactive")
+    return company
+
+
+CurrentCompany = Annotated[Company, Depends(get_current_company)]
+
+
 def require_role(*roles: UserRole):
+    """Foydalanuvchi rolini tekshirish dep'i."""
     async def checker(user: CurrentUser) -> User:
         if user.role not in roles:
             raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions"
+                status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient role"
             )
         return user
-
     return checker
+
+
+def require_kind(*kinds: CompanyKind):
+    """Tashkilot turi (factory/carrier/distributor) tekshiruvi."""
+    async def checker(company: CurrentCompany) -> Company:
+        if company.kind not in kinds:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"This endpoint is only for {', '.join(k.value for k in kinds)}",
+            )
+        return company
+    return checker
+
+
+# Tez ishlatish uchun preset'lar
+RequireFactory = Annotated[Company, Depends(require_kind(CompanyKind.FACTORY))]
+RequireCarrier = Annotated[Company, Depends(require_kind(CompanyKind.CARRIER))]
+RequireDistributor = Annotated[Company, Depends(require_kind(CompanyKind.DISTRIBUTOR))]

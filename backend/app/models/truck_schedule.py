@@ -3,8 +3,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 from uuid import UUID
 
-from sqlalchemy import DateTime, Enum, ForeignKey, Index, Text, func
-from sqlalchemy.dialects.postgresql import UUID as PGUUID
+from sqlalchemy import DateTime, Enum, ForeignKey, Index, Text, Uuid, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, UUIDPrimaryKeyMixin
@@ -28,7 +27,7 @@ class TruckSchedule(Base, UUIDPrimaryKeyMixin):
     )
 
     truck_id: Mapped[UUID] = mapped_column(
-        PGUUID(as_uuid=True), ForeignKey("trucks.id", ondelete="CASCADE"), nullable=False
+        Uuid, ForeignKey("trucks.id", ondelete="CASCADE"), nullable=False
     )
     start_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     end_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
@@ -36,7 +35,7 @@ class TruckSchedule(Base, UUIDPrimaryKeyMixin):
         Enum(ScheduleKind, name="schedule_kind"), nullable=False
     )
     assignment_id: Mapped[UUID | None] = mapped_column(
-        PGUUID(as_uuid=True), ForeignKey("assignments.id", ondelete="CASCADE")
+        Uuid, ForeignKey("assignments.id", ondelete="CASCADE")
     )
     notes: Mapped[str | None] = mapped_column(Text)
 

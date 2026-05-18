@@ -1,16 +1,14 @@
+from decimal import Decimal
 from uuid import UUID
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, status
+from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
 from app.api.deps import CurrentUser, DbSession
-from app.db.session import AsyncSessionLocal
 from app.models.cargo import Cargo, CargoStatus
 from app.models.company import Company, CompanyKind
 from app.schemas.cargo import CargoCreate, CargoOut, CargoUpdate
-from app.services.assignment import auto_assign_cargo
-from app.services.geo import geopoint_to_wkt
 
 router = APIRouter(prefix="/cargo", tags=["cargo"])
 
@@ -19,14 +17,17 @@ router = APIRouter(prefix="/cargo", tags=["cargo"])
 async def list_cargo(
     db: DbSession,
     _user: CurrentUser,
-    shipper_id: UUID | None = None,
+    factory_id: UUID | None = None,
+    distributor_id: UUID | None = None,
     status_: CargoStatus | None = Query(None, alias="status"),
     page: int = Query(1, ge=1),
     size: int = Query(50, ge=1, le=500),
 ) -> list[Cargo]:
     stmt = select(Cargo)
-    if shipper_id:
-        stmt = stmt.where(Cargo.shipper_id == shipper_id)
+    if factory_id:
+        stmt = stmt.where(Cargo.factory_id == factory_id)
+    if distributor_id:
+        stmt = stmt.where(Cargo.distributor_id == distributor_id)
     if status_:
         stmt = stmt.where(Cargo.status == status_)
     stmt = (
@@ -42,20 +43,25 @@ async def create_cargo(
     payload: CargoCreate,
     db: DbSession,
     _user: CurrentUser,
-    background_tasks: BackgroundTasks,
-    auto_assign: bool = Query(True, description="Yarating + avto-biriktirish"),
 ) -> Cargo:
-    shipper = await db.get(Company, payload.shipper_id)
-    if not shipper or shipper.kind != CompanyKind.SHIPPER:
+    factory = await db.get(Company, payload.factory_id)
+    if not factory or factory.kind != CompanyKind.FACTORY:
         raise HTTPException(
-            status_code=400, detail="shipper_id must reference a shipper-type company"
+            status_code=400, detail="factory_id must reference a factory-type company"
+        )
+    distributor = await db.get(Company, payload.distributor_id)
+    if not distributor or distributor.kind != CompanyKind.DISTRIBUTOR:
+        raise HTTPException(
+            status_code=400, detail="distributor_id must reference a distributor-type company"
         )
 
     data = payload.model_dump(exclude={"origin_location", "destination_location"})
     cargo = Cargo(
         **data,
-        origin_location=geopoint_to_wkt(payload.origin_location),
-        destination_location=geopoint_to_wkt(payload.destination_location),
+        origin_lat=Decimal(str(payload.origin_location.lat)),
+        origin_lng=Decimal(str(payload.origin_location.lng)),
+        destination_lat=Decimal(str(payload.destination_location.lat)),
+        destination_lng=Decimal(str(payload.destination_location.lng)),
     )
     db.add(cargo)
     try:
@@ -64,18 +70,7 @@ async def create_cargo(
         await db.rollback()
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc.orig))
     await db.refresh(cargo)
-
-    if auto_assign:
-        # Background: yangi yuk uchun avto-biriktirish
-        background_tasks.add_task(_run_auto_assign, cargo.id)
-
     return cargo
-
-
-async def _run_auto_assign(cargo_id: UUID) -> None:
-    """BackgroundTasks ichida ishlatish uchun (mustaqil DB session)."""
-    async with AsyncSessionLocal() as db:
-        await auto_assign_cargo(db, cargo_id, create_assignment=True)
 
 
 @router.get("/{cargo_id}", response_model=CargoOut)
@@ -108,7 +103,7 @@ async def cancel_cargo(cargo_id: UUID, db: DbSession, _user: CurrentUser) -> Non
     cargo = await db.get(Cargo, cargo_id)
     if not cargo:
         raise HTTPException(status_code=404, detail="Cargo not found")
-    if cargo.status in (CargoStatus.DELIVERED, CargoStatus.IN_TRANSIT):
+    if cargo.status in (CargoStatus.DELIVERED, CargoStatus.IN_TRANSIT, CargoStatus.COMPLETED):
         raise HTTPException(
             status_code=400,
             detail=f"Cannot cancel cargo with status {cargo.status.value}",

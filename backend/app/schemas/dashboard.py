@@ -17,7 +17,8 @@ class DashboardSummary(BaseModel):
 
     pending_assignments: int
     active_carriers: int
-    active_shippers: int
+    active_factories: int
+    active_distributors: int
 
     fleet_utilization_pct: float
 

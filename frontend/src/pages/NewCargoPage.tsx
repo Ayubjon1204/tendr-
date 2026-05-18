@@ -33,12 +33,17 @@ const UZ_CITIES: Record<string, { lat: number; lng: number }> = {
 
 export default function NewCargoPage() {
   const navigate = useNavigate()
-  const shippers = useQuery({
-    queryKey: ['companies', 'shippers'],
-    queryFn: () => companiesApi.list({ kind: 'shipper' }),
+  const factories = useQuery({
+    queryKey: ['companies', 'factories'],
+    queryFn: () => companiesApi.list({ kind: 'factory' }),
+  })
+  const distributors = useQuery({
+    queryKey: ['companies', 'distributors'],
+    queryFn: () => companiesApi.list({ kind: 'distributor' }),
   })
 
-  const [shipperId, setShipperId] = useState('')
+  const [factoryId, setFactoryId] = useState('')
+  const [distributorId, setDistributorId] = useState('')
   const [refCode, setRefCode] = useState('TND-' + Math.floor(Math.random() * 1_000_000))
   const [originCity, setOriginCity] = useState('Toshkent')
   const [destinationCity, setDestinationCity] = useState('Samarqand')
@@ -51,22 +56,20 @@ export default function NewCargoPage() {
 
   const createMutation = useMutation({
     mutationFn: () =>
-      cargoApi.create(
-        {
-          shipper_id: shipperId,
-          reference_code: refCode,
-          weight_kg: parseInt(weight, 10),
-          required_body_type: bodyType || null,
-          origin_address: `${originCity}, ombor`,
-          origin_location: UZ_CITIES[originCity],
-          destination_address: `${destinationCity}, mijoz`,
-          destination_location: UZ_CITIES[destinationCity],
-          pickup_window_start: new Date(pickupStart).toISOString(),
-          pickup_window_end: new Date(pickupEnd).toISOString(),
-          delivery_deadline: new Date(deadline).toISOString(),
-        },
-        true,
-      ),
+      cargoApi.create({
+        factory_id: factoryId,
+        distributor_id: distributorId,
+        reference_code: refCode,
+        weight_kg: parseInt(weight, 10),
+        required_body_type: bodyType || null,
+        origin_address: `${originCity}, zavod ombori`,
+        origin_location: UZ_CITIES[originCity],
+        destination_address: `${destinationCity}, distributor`,
+        destination_location: UZ_CITIES[destinationCity],
+        pickup_window_start: new Date(pickupStart).toISOString(),
+        pickup_window_end: new Date(pickupEnd).toISOString(),
+        delivery_deadline: new Date(deadline).toISOString(),
+      }),
     onSuccess: () => navigate('/cargo'),
     onError: (err) => setError(extractError(err)),
   })
@@ -74,37 +77,67 @@ export default function NewCargoPage() {
   function onSubmit(e: FormEvent) {
     e.preventDefault()
     setError(null)
-    if (!shipperId) {
-      setError('Yuk egasini tanlang')
+    if (!factoryId) {
+      setError('Zavodni tanlang')
+      return
+    }
+    if (!distributorId) {
+      setError('Distributorni tanlang')
       return
     }
     createMutation.mutate()
   }
 
+  const loading = factories.isLoading || distributors.isLoading
+
   return (
     <div>
-      <PageHeader title="Yangi yuk" description="Yangi yuk qo'shgach, tizim avtomatik mos mashina topadi" />
+      <PageHeader
+        title="Yangi yuk"
+        description="Zavoddan distributorgacha yuk. Tarqatish keyingi bosqichda."
+      />
 
       <div className="p-8">
         <Card className="max-w-3xl">
           <CardContent>
-            {shippers.isLoading ? (
+            {loading ? (
               <Spinner />
             ) : (
               <form onSubmit={onSubmit} className="space-y-5">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
-                    <Label required>Yuk egasi (shipper)</Label>
-                    <Select value={shipperId} onChange={(e) => setShipperId(e.target.value)} required>
+                    <Label required>Zavod (yuboruvchi)</Label>
+                    <Select value={factoryId} onChange={(e) => setFactoryId(e.target.value)} required>
                       <option value="">Tanlang...</option>
-                      {shippers.data?.map((s) => (
+                      {factories.data?.map((s) => (
                         <option key={s.id} value={s.id}>{s.name}</option>
                       ))}
                     </Select>
                   </div>
                   <div className="space-y-1.5">
+                    <Label required>Distributor (qabul qiluvchi)</Label>
+                    <Select value={distributorId} onChange={(e) => setDistributorId(e.target.value)} required>
+                      <option value="">Tanlang...</option>
+                      {distributors.data?.map((s) => (
+                        <option key={s.id} value={s.id}>{s.name}</option>
+                      ))}
+                    </Select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
                     <Label required>Reference code</Label>
                     <Input value={refCode} onChange={(e) => setRefCode(e.target.value)} required />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Kuzov turi</Label>
+                    <Select value={bodyType} onChange={(e) => setBodyType(e.target.value as BodyType | '')}>
+                      <option value="">Farqi yo'q</option>
+                      {Object.entries(bodyTypeLabel).map(([k, v]) => (
+                        <option key={k} value={k}>{v}</option>
+                      ))}
+                    </Select>
                   </div>
                 </div>
 
@@ -127,26 +160,15 @@ export default function NewCargoPage() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-1.5">
-                    <Label required>Og'irlik (kg)</Label>
-                    <Input
-                      type="number"
-                      min={1}
-                      value={weight}
-                      onChange={(e) => setWeight(e.target.value)}
-                      required
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label>Kuzov turi</Label>
-                    <Select value={bodyType} onChange={(e) => setBodyType(e.target.value as BodyType | '')}>
-                      <option value="">Farqi yo'q</option>
-                      {Object.entries(bodyTypeLabel).map(([k, v]) => (
-                        <option key={k} value={k}>{v}</option>
-                      ))}
-                    </Select>
-                  </div>
+                <div className="space-y-1.5">
+                  <Label required>Og'irlik (kg)</Label>
+                  <Input
+                    type="number"
+                    min={1}
+                    value={weight}
+                    onChange={(e) => setWeight(e.target.value)}
+                    required
+                  />
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -187,7 +209,7 @@ export default function NewCargoPage() {
 
                 <div className="flex items-center gap-3 pt-2">
                   <Button type="submit" disabled={createMutation.isPending}>
-                    {createMutation.isPending ? 'Saqlanmoqda...' : 'Saqlash + avto-biriktirish'}
+                    {createMutation.isPending ? 'Saqlanmoqda...' : 'Saqlash'}
                   </Button>
                   <Button type="button" variant="ghost" onClick={() => navigate(-1)}>
                     Bekor qilish

@@ -5,8 +5,8 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.enums import BodyType
-from app.models.truck import TruckStatus
-from app.schemas.common import GeoPoint, GeoPointOrNone
+from app.models.truck import SpotSource, TruckStatus
+from app.schemas.common import GeoPoint
 
 
 class TruckBase(BaseModel):
@@ -18,7 +18,9 @@ class TruckBase(BaseModel):
 
 
 class TruckCreate(TruckBase):
-    carrier_id: UUID
+    carrier_id: UUID | None = None  # Spot truck uchun None
+    is_spot: bool = False
+    spot_source: SpotSource | None = None
     current_location: GeoPoint | None = None
     home_base_location: GeoPoint | None = None
 
@@ -44,10 +46,12 @@ class TruckOut(TruckBase):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
-    carrier_id: UUID
+    carrier_id: UUID | None
+    is_spot: bool
+    spot_source: SpotSource | None
     status: TruckStatus
-    current_location: GeoPointOrNone = None
-    home_base_location: GeoPointOrNone = None
+    current_location: GeoPoint | None = None
+    home_base_location: GeoPoint | None = None
     last_location_update: datetime | None = None
     is_active: bool
     created_at: datetime

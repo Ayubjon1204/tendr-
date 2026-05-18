@@ -9,24 +9,29 @@ from app.models.assignment import AssignmentSource, AssignmentStatus
 
 class AssignmentBase(BaseModel):
     cargo_id: UUID
-    truck_id: UUID
+    carrier_id: UUID
+    truck_id: UUID | None = None
     driver_id: UUID | None = None
     planned_pickup_at: datetime
     planned_delivery_at: datetime
     notes: str | None = None
+    price: Decimal | None = Field(None, ge=0)
 
 
 class AssignmentCreate(AssignmentBase):
-    assigned_by: AssignmentSource = AssignmentSource.DISPATCHER
+    parent_assignment_id: UUID | None = None
+    assigned_by: AssignmentSource = AssignmentSource.FACTORY
 
 
 class AssignmentUpdate(BaseModel):
     status: AssignmentStatus | None = None
+    truck_id: UUID | None = None
     driver_id: UUID | None = None
     planned_pickup_at: datetime | None = None
     planned_delivery_at: datetime | None = None
     actual_pickup_at: datetime | None = None
     actual_delivery_at: datetime | None = None
+    price: Decimal | None = Field(None, ge=0)
     notes: str | None = None
 
 
@@ -34,6 +39,7 @@ class AssignmentOut(AssignmentBase):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
+    parent_assignment_id: UUID | None
     status: AssignmentStatus
     assigned_by: AssignmentSource
     actual_pickup_at: datetime | None = None
@@ -45,6 +51,7 @@ class AssignmentOut(AssignmentBase):
 
 class AutoAssignRequest(BaseModel):
     cargo_id: UUID
+    carrier_id: UUID  # Endi carrier'ga tegishli (factory carrier'lar orasidan tanlaydi)
     max_candidates: int = Field(5, ge=1, le=20)
 
 

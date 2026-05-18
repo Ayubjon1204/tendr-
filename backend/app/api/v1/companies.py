@@ -77,5 +77,5 @@ async def delete_company(company_id: UUID, db: DbSession, _user: CurrentUser) ->
     company = await db.get(Company, company_id)
     if not company:
         raise HTTPException(status_code=404, detail="Company not found")
-    company.is_active = False  # Soft delete — referensial yaxlitlik uchun
+    company.is_active = False
     await db.commit()

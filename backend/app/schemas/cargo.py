@@ -6,7 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.models.cargo import CargoStatus
 from app.models.enums import BodyType
-from app.schemas.common import GeoPoint, GeoPointReq
+from app.schemas.common import GeoPoint
 
 
 class CargoBase(BaseModel):
@@ -28,7 +28,8 @@ class CargoBase(BaseModel):
 
 
 class CargoCreate(CargoBase):
-    shipper_id: UUID
+    factory_id: UUID
+    distributor_id: UUID
     origin_location: GeoPoint
     destination_location: GeoPoint
 
@@ -57,9 +58,10 @@ class CargoOut(CargoBase):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
-    shipper_id: UUID
+    factory_id: UUID
+    distributor_id: UUID
     status: CargoStatus
-    origin_location: GeoPointReq
-    destination_location: GeoPointReq
+    origin_location: GeoPoint
+    destination_location: GeoPoint
     created_at: datetime
     updated_at: datetime

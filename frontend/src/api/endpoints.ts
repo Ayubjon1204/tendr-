@@ -91,10 +91,8 @@ export const cargoApi = {
     const { data } = await api.get<Cargo>(`/cargo/${id}`)
     return data
   },
-  async create(payload: Record<string, unknown>, autoAssign = true): Promise<Cargo> {
-    const { data } = await api.post<Cargo>('/cargo', payload, {
-      params: { auto_assign: autoAssign },
-    })
+  async create(payload: Record<string, unknown>): Promise<Cargo> {
+    const { data } = await api.post<Cargo>('/cargo', payload)
     return data
   },
 }
@@ -105,15 +103,17 @@ export const assignmentsApi = {
     const { data } = await api.get<Assignment[]>('/assignments', { params })
     return data
   },
-  async autoAssign(cargoId: string): Promise<AutoAssignResult> {
+  async autoAssign(cargoId: string, carrierId: string): Promise<AutoAssignResult> {
     const { data } = await api.post<AutoAssignResult>('/assignments/auto', {
       cargo_id: cargoId,
+      carrier_id: carrierId,
     })
     return data
   },
-  async previewAutoAssign(cargoId: string): Promise<AutoAssignResult> {
+  async previewAutoAssign(cargoId: string, carrierId: string): Promise<AutoAssignResult> {
     const { data } = await api.post<AutoAssignResult>('/assignments/auto/preview', {
       cargo_id: cargoId,
+      carrier_id: carrierId,
     })
     return data
   },

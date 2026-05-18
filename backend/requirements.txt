@@ -1,13 +1,13 @@
-# Loose lower bounds — pip pick latest with Python 3.14 wheels.
+# Python 3.14 mos kelgan versiyalar.
 fastapi>=0.115
 uvicorn[standard]>=0.32
 sqlalchemy>=2.0.36
 alembic>=1.14
 
 # DB drivers
-asyncpg>=0.30
-psycopg[binary]>=3.2
-geoalchemy2>=0.16
+aiosqlite>=0.20      # SQLite async (dev default)
+asyncpg>=0.30        # Postgres async (production uchun)
+psycopg[binary]>=3.2 # Postgres sync (Alembic uchun)
 
 # Validation
 pydantic>=2.11
@@ -20,11 +20,8 @@ passlib[bcrypt]>=1.7
 bcrypt>=4.0,<5.0  # passlib 1.7.4 bcrypt 5.x bilan mos kelmaydi
 python-multipart>=0.0.19
 
-# Optimization
+# Optimization (Phase 4'da)
 ortools>=9.15
-
-# Background tasks
-celery[redis]>=5.4
 
 # HTTP
 httpx>=0.28

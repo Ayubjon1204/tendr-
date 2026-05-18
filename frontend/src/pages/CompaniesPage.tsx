@@ -11,7 +11,7 @@ import {
   Spinner,
 } from '@/components/ui'
 import PageHeader from '@/components/PageHeader'
-import { companyKindLabel } from '@/lib/formatters'
+import { carrierTypeLabel, companyKindLabel } from '@/lib/formatters'
 import type { CompanyKind } from '@/types/api'
 
 export default function CompaniesPage() {
@@ -42,8 +42,9 @@ export default function CompaniesPage() {
             className="w-56"
           >
             <option value="">Barcha turlari</option>
+            <option value="factory">Zavodlar</option>
             <option value="carrier">Tashuvchilar</option>
-            <option value="shipper">Yuk egalari</option>
+            <option value="distributor">Distributorlar</option>
           </Select>
           <Input
             placeholder="Nom bo'yicha qidirish..."
@@ -65,6 +66,7 @@ export default function CompaniesPage() {
                   <tr>
                     <th className="text-left px-6 py-3 font-medium">Nom</th>
                     <th className="text-left px-6 py-3 font-medium">Turi</th>
+                    <th className="text-left px-6 py-3 font-medium">Carrier subtype</th>
                     <th className="text-left px-6 py-3 font-medium">STIR</th>
                     <th className="text-left px-6 py-3 font-medium">Telefon</th>
                     <th className="text-left px-6 py-3 font-medium">Manzil</th>
@@ -75,9 +77,12 @@ export default function CompaniesPage() {
                     <tr key={c.id} className="hover:bg-slate-50">
                       <td className="px-6 py-3 font-medium">{c.name}</td>
                       <td className="px-6 py-3">
-                        <Badge variant={c.kind === 'carrier' ? 'blue' : 'green'}>
+                        <Badge variant={c.kind === 'carrier' ? 'blue' : c.kind === 'factory' ? 'yellow' : 'green'}>
                           {companyKindLabel[c.kind]}
                         </Badge>
+                      </td>
+                      <td className="px-6 py-3 text-slate-600 text-xs">
+                        {c.carrier_type ? carrierTypeLabel[c.carrier_type] : '—'}
                       </td>
                       <td className="px-6 py-3 text-slate-600">{c.tax_id ?? '—'}</td>
                       <td className="px-6 py-3 text-slate-600">{c.phone ?? '—'}</td>
