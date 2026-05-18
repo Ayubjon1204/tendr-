@@ -1,16 +1,35 @@
-fastapi==0.115.5
-uvicorn[standard]==0.32.1
-sqlalchemy==2.0.36
-alembic==1.14.0
-asyncpg==0.30.0
-psycopg2-binary==2.9.10
-geoalchemy2==0.16.0
-pydantic==2.10.3
-pydantic-settings==2.6.1
-python-jose[cryptography]==3.3.0
-passlib[bcrypt]==1.7.4
-python-multipart==0.0.19
-ortools==9.11.4210
-celery[redis]==5.4.0
-httpx==0.28.1
-python-dotenv==1.0.1
+# Loose lower bounds — pip pick latest with Python 3.14 wheels.
+fastapi>=0.115
+uvicorn[standard]>=0.32
+sqlalchemy>=2.0.36
+alembic>=1.14
+
+# DB drivers
+asyncpg>=0.30
+psycopg[binary]>=3.2
+geoalchemy2>=0.16
+
+# Validation
+pydantic>=2.11
+pydantic-settings>=2.6
+email-validator>=2.2
+
+# Auth
+python-jose[cryptography]>=3.3
+passlib[bcrypt]>=1.7
+bcrypt>=4.0,<5.0  # passlib 1.7.4 bcrypt 5.x bilan mos kelmaydi
+python-multipart>=0.0.19
+
+# Optimization
+ortools>=9.15
+
+# Background tasks
+celery[redis]>=5.4
+
+# HTTP
+httpx>=0.28
+python-dotenv>=1.0
+
+# Dev/test
+pytest>=8.3
+pytest-asyncio>=0.25

@@ -11,6 +11,14 @@ pip install -r requirements.txt
 copy .env.example .env
 ```
 
+> Python 3.14 ham qo'llab-quvvatlanadi (sinovdan o'tgan). Eski Python 3.12/3.13 ham ishlaydi.
+
+## Sinovlar
+
+```powershell
+pytest -v
+```
+
 ## Database (Docker)
 
 Loyiha root'idan:
@@ -30,6 +38,17 @@ Yangi model qo'shgandan keyin migration yaratish:
 alembic revision --autogenerate -m "add something"
 alembic upgrade head
 ```
+
+## Seed (sinov ma'lumotlari)
+
+```powershell
+python -m app.scripts.seed
+```
+
+Yaratadi: 5 carrier, 6 shipper, ~30 mashina, ~60 haydovchi, ~40 yuk.
+
+Login (admin): `admin@tendr.local` / `admin123`
+Login (dispatcher): `dispatcher@tendr.local` / `disp123`
 
 ## Ishga tushirish
 
