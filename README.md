@@ -1,73 +1,56 @@
-# React + TypeScript + Vite
+# Tendr — Transport Management System
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Logistika ERP/TMS — yuklar va transport mashinalari boshqaruvi tizimi.
 
-Currently, two official plugins are available:
+## Maqsad
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+Transport kompaniyalarining mashinalarini "soatdek" ishlashini ta'minlash:
+- Bo'sh turishni minimallashtirish
+- Yuksiz qaytishni kamaytirish (back-haul matching)
+- Yuklarni avtomatik biriktirish (Vehicle Routing optimization)
+- Ertangi kun va dam olish kunlarini hisobga olgan rejalashtirish
 
-## React Compiler
+## Tuzilish
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```
+tendr-/
+├── frontend/          # React + Vite + TypeScript
+├── backend/           # FastAPI + SQLAlchemy + OR-Tools
+├── docs/              # Arxitektura, DB schema
+└── docker-compose.yml # Postgres+PostGIS dev muhiti
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## Talablar
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+- Node.js 20+
+- Python 3.11+
+- Docker Desktop (Postgres uchun)
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+## Ishga tushirish
+
+### 1. Bazani ishga tushirish
+```powershell
+docker compose up -d db
 ```
+
+### 2. Backend
+```powershell
+cd backend
+python -m venv .venv
+.venv\Scripts\activate
+pip install -r requirements.txt
+alembic upgrade head
+uvicorn app.main:app --reload
+```
+
+### 3. Frontend
+```powershell
+cd frontend
+npm install
+npm run dev
+```
+
+## Hujjatlar
+
+- [Arxitektura](docs/ARCHITECTURE.md)
+- [Database schema](docs/DATABASE.md)
