@@ -1,0 +1,14 @@
+{
+  "name": "tendr",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Tendr — Transport Management System (monorepo root)",
+  "scripts": {
+    "dev": "npm --prefix frontend run dev",
+    "build": "npm --prefix frontend run build",
+    "preview": "npm --prefix frontend run preview",
+    "lint": "npm --prefix frontend run lint",
+    "install:all": "npm --prefix frontend install",
+    "start": "powershell -ExecutionPolicy Bypass -File ./dev-start.ps1"
+  }
+}
